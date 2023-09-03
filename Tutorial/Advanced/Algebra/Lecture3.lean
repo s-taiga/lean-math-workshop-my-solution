@@ -51,17 +51,17 @@ theorem smul_smul (a b : G) (x : X) : a • b • x = (a * b) • x := (mul_smul
 -- いくつかの`simp`を追加
 @[simp]
 theorem inv_smul_smul {a : G} {x : X} : a⁻¹ • a • x = x := by
-  sorry
+  rw [smul_smul, inv_mul_self, one_smul]
 
 @[simp]
 theorem smul_inv_smul {a : G} {x : X} : a • a⁻¹ • x = x := by
-  sorry
+  rw [smul_smul, mul_inv_self, one_smul]
 
 /-- `G`集合に対して左から`a : G`を当てる写像は単射。 -/
 theorem GroupAction.injective (a : G) : Function.Injective fun (x : X) ↦ a • x := by
   intro x y (h : a • x = a • y)
   -- `calc`を使うとよいかも？
-  sorry
+  rw [← inv_smul_smul (a := a) (x := x), h, inv_smul_smul]
 
 -- 上の言い換え、きっといつか使うときに便利。
 /-- `G`集合に対して、`a : G`を当てて等しいならもともと等しい。 -/
@@ -70,28 +70,38 @@ theorem smul_cancel (a : G) {x y : X} (h : a • x = a • y) : x = y :=
 
 /-- 左から`a : G`を当てる写像は全射。 -/
 theorem GroupAction.surjective (a : G) : Function.Surjective fun (x : X) ↦ a • x := by
-  sorry
+  rw [Function.Surjective]
+  intro b
+  exists a⁻¹ • b
+  exact smul_inv_smul
 
 -- もっと強く、`a • (-)`という写像は自然な逆写像を持つ`X`から`X`への全単射である。
 -- `X`から`X`への全単射とその逆写像の組の集合は`X ≃ X`と表す。
 def GroupAction.toPerm : G → (X ≃ X) := fun (a : G) ↦ {
   toFun := fun x ↦ a • x
   -- この写像の逆写像は何であろうか？
-  invFun := sorry
+  invFun := fun x ↦ a⁻¹ • x
   -- これらが互いに逆写像なことを示す必要がある。
   left_inv := by
-    sorry
+    rw [Function.LeftInverse]
+    intro x
+    exact inv_smul_smul
   right_inv := by
-    sorry
+    rw [Function.RightInverse, Function.LeftInverse]
+    intro x
+    exact smul_inv_smul
 }
 
 -- 群`G`自体も左から元を当てることで、自然に左`G`集合になる。
 instance : GroupAction G G where
   smul := fun a x ↦ a * x
   one_smul' := by
-    sorry
+    intro x
+    apply one_mul
   mul_smul' := by
-    sorry
+    intro a b x
+    simp
+    exact mul_assoc a b x
 
 /-- `G`集合`G`での`•`の定義の確認。 -/
 @[simp]
@@ -143,7 +153,8 @@ theorem map_smul (f : X →[G] Y) : ∀ (a : G) (x : X), f (a • x) = a • f x
 def GroupActionHom.comp (f₁ : X →[G] Y) (f₂ : Y →[G] Z) : X →[G] Z where
   toFun := f₂ ∘ f₁
   map_smul' := by
-    sorry
+    intro a x
+    rw [Function.comp_apply, map_smul, map_smul, Function.comp_apply]
 
 -- ついでに`G`集合の同型も定義しよう。
 
@@ -168,7 +179,9 @@ def GroupActionHom.inverse (f : X →[G] Y)
     もしくは、`rw [Function.LeftInverse] at h₁`で定義を確認して、
     それを利用して直接`calc`で等式を示すこともできる。
     -/
-    sorry
+    intro a y
+    apply h₁.injective
+    rw [h₂, map_smul, h₂]
 
 /-
 最後に、`G`集合`X`について、`G`自身から`X`への同変写像の集合は、
@@ -184,7 +197,9 @@ def yoneda : (G →[G] X) ≃ X where
   invFun := fun x ↦ {
     toFun := fun a ↦ a • x
     map_smul' := by -- `G`同変なことを示す必要がある。
-      sorry
+      intro a b
+      simp
+      exact mul_smul a b x
   }
   -- これらが互いに逆写像なこと。
   left_inv := by
@@ -194,9 +209,15 @@ def yoneda : (G →[G] X) ≃ X where
     またゴールが定義上「`c = d`」に等しいときは、
     `change c = d`でゴールをその形に変えられる。
     -/
-    sorry
+    rw [Function.LeftInverse]
+    intro f
+    ext a
+    simp
+    rw [← map_smul, smul_eq_mul, mul_one]
   right_inv := by
-    sorry
+    rw [Function.RightInverse, Function.LeftInverse]
+    intro x
+    simp only [GroupActionHom.coe_coe, one_smul]
 
 end Section2
 
@@ -217,11 +238,20 @@ def orbitRel (G) [Group G] (X) [GroupAction G X] : Setoid X where
   r x y := ∃ a : G, a • x = y
   iseqv := { -- この`r`が同値関係なこと。
     refl := by -- 反射律
-      sorry
+      intro x
+      exists 1
+      exact one_smul x
     symm := by -- 対称律
-      sorry
+      intro x y axy
+      have ⟨a, ha⟩ := axy
+      exists a⁻¹
+      rw [← ha, inv_smul_smul]
     trans := by -- 推移律
-      sorry
+      intro x y z axy ayz
+      have ⟨b, hxy⟩ := axy
+      have ⟨a, hyz⟩ := ayz
+      exists a * b
+      rw [mul_smul, hxy, hyz]
   }
 
 -- 一方で`x : X`の軌道というものも考えられる。
@@ -232,7 +262,28 @@ variable [Group G] [GroupAction G X]
 
 /-- 軌道が等しいことと、片方が軌道に含まれることは同値。 -/
 theorem orbit_eq_orbit_iff_mem_orbit {x y : X} : orbit G x = orbit G y ↔ y ∈ orbit G x := by
-  sorry
+  constructor
+  . intro oxoy
+    rw [oxoy, orbit]
+    apply Iff.mpr Set.mem_setOf
+    exists 1
+    exact one_smul y
+  . intro yox
+    have ⟨a, axy⟩ := Iff.mp Set.mem_setOf yox
+    ext b
+    constructor
+    . intro box
+      rw [orbit]
+      have ⟨c, cxb⟩ := Iff.mp Set.mem_setOf box
+      apply Iff.mpr Set.mem_setOf
+      exists c * a⁻¹
+      rw [← axy, mul_smul, inv_smul_smul, cxb]
+    . intro boy
+      rw [orbit]
+      have ⟨c, cyb⟩ := Iff.mp Set.mem_setOf boy
+      apply Iff.mpr Set.mem_setOf
+      exists c * a
+      rw [mul_smul, axy, cyb]
 
 end Appendix
 
